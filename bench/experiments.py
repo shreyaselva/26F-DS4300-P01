@@ -28,6 +28,7 @@ from bench.results import ResultsWriter
 from bench.timing import build_memory_bytes, time_batch, time_build
 from indexes import ALL_INDEXES, make_index
 from loaders.spotify import key_value_pairs, load_tracks
+from datagen.synthetic import arrange, point_queries, random_keys
 
 SEED = 4300
 
@@ -68,11 +69,46 @@ def example_point_lookups(writer: ResultsWriter, tracks: list[dict], reps: int) 
             print(f"  n={n:>7,}  {name:<14} done", flush=True)
 
 
-# Register experiments here: name -> function(writer, tracks, reps).
+# EXPERIMENT 5
+def e5_insert_order(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
+    """Does the order keys arrive in matter? Synthetic keys, four arrival orders."""
+    for n in (1_000, 10_000, 100_000):
+        keys = random_keys(n, length=8, seed=SEED)
+        pairs = [(key, row_id) for row_id, key in enumerate(keys)]
+        queries = point_queries(keys, 1_000, hit_rate=1.0, seed=SEED)
+
+        for order in ("random", "sorted", "reversed", "nearly_sorted"):
+            ordered = arrange(pairs, order, seed=SEED)
+
+            for name in ALL_INDEXES:
+                for rep in range(reps):
+                    common = dict(
+                        experiment="E5_insert_order", dataset="synthetic",
+                        key_column="random_keys_len8", insert_order=order,
+                        n_keys=n, rep=rep,
+                    )
+
+                    index = make_index(name)
+                    ns = time_build(index, ordered)
+                    writer.record(
+                        index, **common, operation="build", operation_param="",
+                        n_ops=n, total_ns=ns,
+                        height=index.structure_info().get("height", ""),
+                    )
+
+                    index.reset_stats()
+                    ns = time_batch(index.search, queries)
+                    writer.record(
+                        index, **common, operation="point_hit", operation_param=1.0,
+                        n_ops=len(queries), total_ns=ns,
+                        height=index.structure_info().get("height", ""),
+                    )
+                print(f"  n={n:>7,}  {order:<14} {name:<14} done", flush=True)
+
 EXPERIMENTS: dict[str, Callable[[ResultsWriter, list[dict], int], None]] = {
     "example": example_point_lookups,
+    "E5_insert_order": e5_insert_order,
 }
-
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     p = parser("Run your experiments.")

@@ -88,8 +88,8 @@ def point_queries(
     rng = random.Random(seed)
     key_set = set(keys)
     chars = sorted({c for k in keys for c in k}) # creates an ordered list (set) of unique characters present in each of the keys
-    n_hits = round(n_queries * hit_rate) # how many look ups (n_queries) of the given should be hit. For for lookups, 0.5 hit rate, 2 must be hit
-    queries = [rng.choice(keys) for _ in range(n_hits)]
+    n_hits = round(n_queries * hit_rate) # how many look ups (n_queries) of the given should be hit. For 4 lookups, 0.5 hit rate, 2 must be hit
+    queries = [rng.choice(keys) for _ in range(n_hits)] # generates random kleys with only half of them as the ones in the actual key set
     for _ in range(n_queries - n_hits): # run the loop no. of lookup queries - no. of hit times 
         length = len(rng.choice(keys))
         while True:
@@ -116,14 +116,14 @@ def range_queries(
     ``lo <= key <= hi``. Works for any comparable keys (strings or numbers).
     """
     rng = random.Random(seed)
-    distinct = sorted(set(keys))
-    d = len(distinct)
-    w = max(1, round(selectivity * d))
+    distinct = sorted(set(keys)) # creates a set of only unique keys - sorted in order (ascending)
+    d = len(distinct) # checks for the length of the set of distinct keys after ordering and removing duplicates
+    w = max(1, round(selectivity * d)) # selectivity*d is fraction of data each range should cover - should be bigger than 1
     ranges = []
     for _ in range(n_queries):
-        start = rng.randrange(d - w + 1)
+        start = rng.randrange(d - w + 1) # start position - separates selected list (w) items from entire list, than adds one back to define the starting position
         ranges.append((distinct[start], distinct[start + w - 1]))
-    return ranges
+    return ranges # returns ranges of predefined length from the given set of keys
 
 
 # cuts down keys to pre-defined uniform length (prefix)... Handbag, handshake - both get stored as hand and hand

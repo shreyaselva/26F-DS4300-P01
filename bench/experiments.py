@@ -28,7 +28,7 @@ from bench.results import ResultsWriter
 from bench.timing import build_memory_bytes, time_batch, time_build
 from indexes import ALL_INDEXES, make_index
 from loaders.spotify import key_value_pairs, load_tracks
-from datagen.synthetic import arrange, point_queries, random_keys
+from datagen.synthetic import arrange, point_queries, random_keys, range_queries
 
 SEED = 4300
 
@@ -109,6 +109,115 @@ EXPERIMENTS: dict[str, Callable[[ResultsWriter, list[dict], int], None]] = {
     "example": example_point_lookups,
     "E5_insert_order": e5_insert_order,
 }
+
+# EXPERIMENT 6
+def e6_bplus_order(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
+    """Compare B+ tree performance across different orders."""
+
+    pairs = key_value_pairs(tracks, "track_id")
+    tempo_pairs = key_value_pairs(tracks, "tempo")
+    tempo_keys = [key for key, _ in tempo_pairs]
+
+    ranges = range_queries(
+    tempo_keys,
+    n_queries=500,
+    selectivity=0.01,
+    seed=SEED,
+)
+
+    rng = random.Random(SEED)
+    queries = [key for key, _ in rng.sample(pairs, 500)]
+
+    miss_queries = [f"missing_track_{i}" for i in range(500)]
+    existing_ids = {key for key, _ in pairs}
+    assert all(key not in existing_ids for key in miss_queries)
+
+    orders = (3, 4, 8, 16, 32, 64, 128, 256, 512)
+
+    for order in orders:
+        for rep in range(reps):
+            common = dict(
+            experiment="E6_bplus_order",
+            dataset="spotify",
+            key_column="track_id",
+            insert_order="file",
+            n_keys=len(pairs),
+            rep=rep,
+        )
+            index = make_index("bplus_tree", order=order)
+            ns = time_build(index, pairs)
+
+            writer.record(
+            index, **common,
+            operation="build",
+            operation_param="",
+            n_ops=len(pairs),
+            total_ns=ns,
+        )
+            index.reset_stats()
+            ns = time_batch(index.search, queries)
+
+            writer.record(
+                index, **common,
+                operation="point_hit",
+                operation_param=1.0,
+                n_ops=len(queries),
+                total_ns=ns,
+                height=index.structure_info().get("height", ""),
+            )
+            index.reset_stats()
+            ns = time_batch(index.search, miss_queries)
+
+            writer.record(
+                index, **common,
+                operation="point_miss",
+                operation_param=0.0,
+                n_ops=len(miss_queries),
+                total_ns=ns,
+                height=index.structure_info().get("height", ""),
+        )
+            tempo_index = make_index("bplus_tree", order=order)
+            tempo_ns = time_build(tempo_index, tempo_pairs)
+
+            tempo_common = dict(
+                experiment="E6_bplus_order",
+                dataset="spotify",
+                key_column="tempo",
+                insert_order="file",
+                n_keys=len(tempo_pairs),
+                rep=rep,
+        )
+
+            writer.record(
+                tempo_index, **tempo_common,
+                operation="build",
+                operation_param="",
+                n_ops=len(tempo_pairs),
+                total_ns=tempo_ns,
+            )
+
+            tempo_index.reset_stats()
+            ns = time_batch(
+                lambda query: tempo_index.range_search(*query),
+                ranges,
+            )
+
+            writer.record(
+                tempo_index, **tempo_common,
+                operation="range",
+                operation_param=0.01,
+                n_ops=len(ranges),
+                total_ns=ns,
+                height=tempo_index.structure_info().get("height", ""),
+        )
+
+EXPERIMENTS: dict[str, Callable[[ResultsWriter, list[dict], int], None]] = {
+    "example": example_point_lookups,
+    "E5_insert_order": e5_insert_order,
+    "E6_bplus_order": e6_bplus_order,
+}
+    
+
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     p = parser("Run your experiments.")

@@ -1,2 +1,3 @@
 machine_id,member,computer_model,cpu_model,cpu_cores,ram_gb,os,docker_cpus,docker_memory_gb,power
 saariya-mbp,saariya,MacBook Pro,Apple M2,8,16,macOS 14,8,7.7,plugged in
+imani-mbp,imani,MacBook Air,Apple M4,10,16,macOS 15.8.1,10,7.75,battery

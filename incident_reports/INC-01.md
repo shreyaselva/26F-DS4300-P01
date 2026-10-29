@@ -58,8 +58,7 @@ Stops when it encounters a key greater than the upper bound hi.
 
 This avoids visiting unrelated subtrees and reduces the number of comparisons required for range searches.
 
-Git diff and commit hash: To be added after committing the corrected implementation.
-
+The corrected implementation was committed in 35349d9. The changes to indexes/bplus_tree.py can be reviewed in that commit's Git diff.
 
 ## Verification
 

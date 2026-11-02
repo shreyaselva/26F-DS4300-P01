@@ -28,7 +28,7 @@ from bench.results import ResultsWriter
 from bench.timing import build_memory_bytes, time_batch, time_build
 from indexes import ALL_INDEXES, make_index
 from loaders.spotify import key_value_pairs, load_tracks
-from datagen.synthetic import arrange, point_queries, random_keys, range_queries
+from datagen.synthetic import arrange, point_queries, random_keys, range_queries, prefix_queries
 
 SEED = 4300
 
@@ -68,6 +68,55 @@ def example_point_lookups(writer: ResultsWriter, tracks: list[dict], reps: int) 
                 )
             print(f"  n={n:>7,}  {name:<14} done", flush=True)
 
+# EXPERIMENT 3
+def e3_range_tempo(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
+    """How does range-query cost depend on how much of the data the range covers?"""
+    pairs = key_value_pairs(tracks, "tempo")          # all 114k rows, file order
+    keys = [key for key, _ in pairs]
+    selectivities = (0.0001, 0.001, 0.01, 0.05, 0.1, 0.25)
+    # Make every query set up front, before any timing.
+    ranges = {s: range_queries(keys, 200, selectivity=s, seed=SEED) for s in selectivities}
+
+    for name in ALL_INDEXES:
+        index = make_index(name)       # range search doesn't change the index,
+        time_build(index, pairs)       # so one build per index is enough
+        for s in selectivities:
+            for rep in range(reps):
+                index.reset_stats()
+                ns = time_batch(lambda q: index.range_search(*q), ranges[s])
+                writer.record(
+                    index, experiment="E3_range_tempo", dataset="spotify",
+                    key_column="tempo", insert_order="file", n_keys=len(pairs),
+                    rep=rep, operation="range", operation_param=s,
+                    n_ops=len(ranges[s]), total_ns=ns,
+                    height=index.structure_info().get("height", ""),
+                )
+            print(f"  {name:<14} selectivity={s:<7} done", flush=True)
+
+
+# EXPERIMENT 4
+def e4_prefix_track_name(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
+    """How does prefix-search cost depend on prefix length?"""
+    pairs = key_value_pairs(tracks, "track_name")     # file order
+    keys = [key for key, _ in pairs]
+    lengths = (1, 2, 3, 4, 5)
+    prefixes = {p: prefix_queries(keys, 200, prefix_length=p, seed=SEED) for p in lengths}
+
+    for name in ALL_INDEXES:
+        index = make_index(name)
+        time_build(index, pairs)
+        for p in lengths:
+            for rep in range(reps):
+                index.reset_stats()
+                ns = time_batch(index.prefix_search, prefixes[p])
+                writer.record(
+                    index, experiment="E4_prefix_track_name", dataset="spotify",
+                    key_column="track_name", insert_order="file", n_keys=len(pairs),
+                    rep=rep, operation="prefix", operation_param=p,
+                    n_ops=len(prefixes[p]), total_ns=ns,
+                    height=index.structure_info().get("height", ""),
+                )
+            print(f"  {name:<14} prefix_length={p} done", flush=True)
 
 # EXPERIMENT 5
 def e5_insert_order(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
@@ -213,6 +262,8 @@ def e6_bplus_order(writer: ResultsWriter, tracks: list[dict], reps: int) -> None
 
 EXPERIMENTS: dict[str, Callable[[ResultsWriter, list[dict], int], None]] = {
     "example": example_point_lookups,
+    "E3_range_tempo": e3_range_tempo,
+    "E4_prefix_track_name": e4_prefix_track_name,
     "E5_insert_order": e5_insert_order,
     "E6_bplus_order": e6_bplus_order,
 }

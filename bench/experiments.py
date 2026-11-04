@@ -68,6 +68,30 @@ def example_point_lookups(writer: ResultsWriter, tracks: list[dict], reps: int) 
                 )
             print(f"  n={n:>7,}  {name:<14} done", flush=True)
 
+# EXPERIMENT 1
+def e1_build_track_id(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
+    """How does build cost grow with n, and how much memory does each index use?"""
+    pairs = key_value_pairs(tracks, "track_id")
+    sizes = (1_000, 2_000, 5_000, 10_000, 20_000, 50_000, len(pairs))
+
+    for n in sizes:
+        subset = pairs[:n]
+
+        for name in ALL_INDEXES:
+            memory = build_memory_bytes(lambda: make_index(name), subset)
+
+            for rep in range(reps):
+                index = make_index(name)
+                ns = time_build(index, subset)
+                writer.record(
+                    index, experiment="E1_build_track_id", dataset="spotify",
+                    key_column="track_id", insert_order="file", n_keys=n,
+                    rep=rep, operation="build", operation_param="",
+                    n_ops=n, total_ns=ns, memory_bytes=memory,
+                    height=index.structure_info().get("height", ""),
+                )
+            print(f"  n={n:>7,}  {name:<14} done", flush=True)
+
 # EXPERIMENT 3
 def e3_range_tempo(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
     """How does range-query cost depend on how much of the data the range covers?"""
@@ -262,6 +286,7 @@ def e6_bplus_order(writer: ResultsWriter, tracks: list[dict], reps: int) -> None
 
 EXPERIMENTS: dict[str, Callable[[ResultsWriter, list[dict], int], None]] = {
     "example": example_point_lookups,
+    "E1_build_track_id": e1_build_track_id,
     "E3_range_tempo": e3_range_tempo,
     "E4_prefix_track_name": e4_prefix_track_name,
     "E5_insert_order": e5_insert_order,

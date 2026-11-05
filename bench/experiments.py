@@ -92,6 +92,39 @@ def e1_build_track_id(writer: ResultsWriter, tracks: list[dict], reps: int) -> N
                 )
             print(f"  n={n:>7,}  {name:<14} done", flush=True)
 
+# EXPERIMENT 2
+def e2_point_lookup(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
+    """How does point-lookup cost grow with n, for hits and for misses?"""
+    pairs = key_value_pairs(tracks, "track_id")
+    sizes = (1_000, 2_000, 5_000, 10_000, 20_000, 50_000, len(pairs))
+    hit_rates = (1.0, 0.0)
+
+    for n in sizes:
+        subset = pairs[:n]
+        keys = list(dict.fromkeys(key for key, _ in subset))
+        key_set = set(keys)
+        queries = {h: point_queries(keys, 500, hit_rate=h, seed=SEED) for h in hit_rates}
+        assert all(q in key_set for q in queries[1.0])
+        assert not any(q in key_set for q in queries[0.0])
+
+        for name in ALL_INDEXES:
+            index = make_index(name)
+            time_build(index, subset)
+
+            for h in hit_rates:
+                operation = "point_hit" if h == 1.0 else "point_miss"
+                for rep in range(reps):
+                    index.reset_stats()
+                    ns = time_batch(index.search, queries[h])
+                    writer.record(
+                        index, experiment="E2_point_lookup", dataset="spotify",
+                        key_column="track_id", insert_order="file", n_keys=n,
+                        rep=rep, operation=operation, operation_param=h,
+                        n_ops=len(queries[h]), total_ns=ns,
+                        height=index.structure_info().get("height", ""),
+                    )
+            print(f"  n={n:>7,}  {name:<14} done", flush=True)
+
 # EXPERIMENT 3
 def e3_range_tempo(writer: ResultsWriter, tracks: list[dict], reps: int) -> None:
     """How does range-query cost depend on how much of the data the range covers?"""
@@ -287,6 +320,7 @@ def e6_bplus_order(writer: ResultsWriter, tracks: list[dict], reps: int) -> None
 EXPERIMENTS: dict[str, Callable[[ResultsWriter, list[dict], int], None]] = {
     "example": example_point_lookups,
     "E1_build_track_id": e1_build_track_id,
+    "E2_point_lookup": e2_point_lookup,
     "E3_range_tempo": e3_range_tempo,
     "E4_prefix_track_name": e4_prefix_track_name,
     "E5_insert_order": e5_insert_order,

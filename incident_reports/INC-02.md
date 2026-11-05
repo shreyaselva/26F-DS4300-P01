@@ -2,7 +2,7 @@
 
 ## Summary
 
-In `indexes/avl_tree.py`, both rotation functions refreshed node heights in the wrong order, so the stored heights were too large. As a result the AVL tree performed about 10 to 15 rotations per insert instead of about 1, and it grew taller than a valid AVL tree can be (height 26 for 100,000 keys, against a limit of about 24). Lookups still returned correct results, which is why the tests did not notice. Swapping two `_update_height` calls in each rotation fixed it: rotations per insert dropped to about 0.7 to 1.2 and the height to 17 to 20. Build time per insert at n = 100,000 improved for random (1.9x), reversed (1.3x) and sorted (1.4x) input; nearly sorted input measured slower in this run (see Verification), which I attribute to timing noise but have not yet confirmed.
+In `indexes/avl_tree.py`, both rotation functions refreshed node heights in the wrong order, so the stored heights were too large. As a result the AVL tree performed about 10 to 15 rotations per insert instead of about 1, and it grew taller than a valid AVL tree can be (height 26 for 100,000 keys, against a limit of about 24). Lookups still returned correct results, which is why the tests did not notice. Swapping two `_update_height` calls in each rotation fixed it: rotations per insert dropped to about 0.7 to 1.2 and the height to 17 to 20. Build time per insert at n = 100,000 improved for random (1.9x), reversed (1.3x) and sorted (1.4x) input, and nearly sorted input improved by about 1.3x once an outlier in the first post-fix run is accounted for (see Verification).
 
 ## Detection
 
@@ -55,13 +55,13 @@ Same experiment (E5), same machine, same seeds, two code versions: `9e83b18` (be
 | sorted | 21 | 17 | 11.39 | 1.0 |
 | reversed | 21 | 17 | 11.39 | 1.0 |
 
-Figure (after the fix): ![AVL counters after the fix](../analysis/e5_avl_post-fix.png)
+Figure (after the fix): ![AVL counters after the fix](../analysis/avl_after_fix.png)
 
 Rotations fell by a factor of 9 to 21, and every height is now below the bound of about 24. For sorted and reversed input the height is 17, which is the minimum possible for 100,000 keys, so those trees are perfectly balanced. The B+ tree rows did not change, as expected, since only `avl_tree.py` was modified. `make test` still passes (168 passed, 3 skipped).
 
 Build time per insert at n = 100,000 (median microseconds, 5 replicates), before (`9e83b18`) and after (`7124e22`): ![AVL build time before and after](../analysis/timings_avl_after.png). The data is also in `analysis/timings_avl_after.csv`.
 
-Three of the four orders got faster, as the lower rotation count predicts. Nearly sorted input measured about 2.7 times slower, which the counters do not explain: its rotations per op (1.2) and comparisons per op (17.2) are only slightly above the other orders, so they cannot account for a fourfold increase in time. Timing on a laptop is noisy, and the whole after-fix E5 run took 454 s against 355 s for the first run, which suggests the machine was busier or hotter during the second run. I therefore do not treat the nearly sorted slowdown as a regression, but I have not confirmed that. The final E5 rerun on a quiet machine will re-measure it; the deterministic counters above are the primary evidence for the fix.
+Three of the four orders got faster in the first run after the fix, as the lower rotation count predicts. Nearly sorted input measured about 2.7 times slower in that run (36.69 against 13.43 microseconds per insert), which the counters could not explain: its rotations per op (1.2) and comparisons per op (17.2) are only slightly above the other orders. That run also took 454 s against 355 s for the first run, which suggested a busier or hotter machine. I confirmed this by rerunning E5 twice more on the same AVL code: the nearly sorted build time at n = 100,000 came out at 10.18 microseconds (code `9174a5c`) and 10.70 microseconds (code `23e3aa3`). So the 36.69 was an outlier, and nearly sorted input is also faster than before the fix, by about 1.3x (13.43 to about 10.2 to 10.7 microseconds per insert). The deterministic counters above remain the primary evidence for the fix.
 
 ## Impact on recommendations
 

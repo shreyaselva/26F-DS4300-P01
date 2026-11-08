@@ -22,9 +22,10 @@ That is about n/2 comparisons, the average position of a key that is present, so
 
 ## Evidence
 
-- Counters plot, comparisons per lookup against n with the log2(n) line, before the fix (random order): ![comparisons per lookup before the fix](../analysis/e5_countervstiming_comparisons.png)
+- Counters plot, comparisons per lookup against n with the log2(n) line, before the fix (random order): ![comparisons per lookup before the fix](../analysis/e5_countervstiming_comparisons_7124e22.png)
+- The same plot after the fix: ![comparisons per lookup after the fix](../analysis/e5_countervstiming_comparisons_after.png). The `sorted_list` line now lies on the dashed log2(n) line, under the AVL tree and B+ tree lines, so it is hard to see; only `unsorted_list` is still linear.
 - Table of lookup time and comparisons per lookup, before (`9174a5c`) and after (`23e3aa3`) the fix, for every insert order and size: ![sorted list point lookups before and after](../analysis/e5_sorted_list_pointlookups.png)
-- Machine `saariya-mbp`. The `sorted_list.py` file is the original in `9174a5c`, since the earlier fixes touched other files.
+- Machine `saariya-mbp`. The `sorted_list.py` file is the original in `9174a5c`, since the earlier fixes touched other files. The before plot was generated from code `7124e22`, whose `sorted_list.py` is identical to the one in `9174a5c`.
 
 ## Root cause
 
@@ -52,5 +53,6 @@ At n = 100,000 the lookup is about 960 to 1,190 times faster depending on the in
 With the bug, the sorted list looked exactly as slow as the unsorted list for point lookups (both linear), so it would have been ranked with the unsorted list and dismissed for the point-lookup feature (F1). After the fix its lookups cost about the same order as the trees (log n) and are only a few microseconds at n = 100,000. The trade-off that the bug was hiding is unchanged by the fix: inserting into the middle of a Python list shifts every later key, so building a sorted list from random or reversed input still costs more per insert as n grows, while the trees and the hash table do not. So after the fix the sorted list is a competitive choice for point lookups and ranges on data that is loaded once and read many times, but not for workloads that insert heavily. This should be checked against the F1 and F3 recommendations once the final runs are in.
 
 ## Why the tests didn't catch it
+
 
 The tests check that `search` returns the right values, and the linear scan does. The bug affects only how many comparisons and how much time a lookup takes. A test that would catch it: build a sorted list of several thousand keys, reset the statistics, look up a key and assert that the number of comparisons is at most about 2 x log2(n), not n/2.

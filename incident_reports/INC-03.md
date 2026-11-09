@@ -2,7 +2,7 @@
 
 ## Summary
 
-In `indexes/hash_table.py`, the `_grow` method added a fixed 1,024 buckets each time the table filled up, instead of doubling its capacity. The number of resizes therefore grew in proportion to n (131 resizes for 100,000 keys, against about 15 for a doubling table), and every resize rehashes all stored keys, so the total build work was quadratic. Build cost per insert rose from about 3 microseconds at n = 10,000 to 37 to 48 microseconds at n = 100,000. Lookups were not affected, because the load factor stayed below its limit. Replacing the fixed step with doubling brought the resizes down to 15 and the build cost at n = 100,000 down to about 2 to 5 microseconds per insert, a speedup of 10x to 23x depending on the insert order.
+In `indexes/hash_table.py`, the `_grow` method added a fixed 1,024 buckets each time the table filled up, instead of doubling its capacity. The number of resizes therefore grew in proportion to n (131 resizes for 100,000 keys, against about 15 for a doubling table), and every resize rehashes all stored keys, so the total build work was quadratic. Build cost per insert rose from about 3 microseconds at n = 10,000 to 37 to 48 microseconds at n = 100,000. Lookups were not affected, because the load factor stayed below its limit. Replacing the fixed step with doubling brought the resizes down to 15 and the build cost at n = 100,000 down to about 2 microseconds per insert (1.9 to 4.7 in the first run after the fix, 2.1 to 2.3 in a rerun on the same hash table code), a speedup of 10x to 23x in the first run after the fix.
 
 ## Detection
 
@@ -28,7 +28,7 @@ The number of resizes grew about tenfold for every tenfold increase in n, so it 
 - Build-cost figure, `hash_table` against `ref_dict`, before the fix: ![E5 build cost before the fix](../analysis/e5_build_cost_before.png)
 - Table of build time per insert and total resizes for every insert order and size, before the fix: ![hash table build time and resizes before the fix](../analysis/e5_resize_timing_hashtable_before.png)
 - Build slope table: `hash_table` k of about 0.78 in all four insert orders.
-- Code versions used: `7124e22` (before), machine `saariya-mbp`.
+- Code versions used: `7124e22` (before) and `9174a5c` (after, the fix commit), with a rerun on `23e3aa3` (same hash table code as `9174a5c`); machine `saariya-mbp`.
 
 ## Root cause
 
@@ -55,9 +55,9 @@ Same experiment (E5), same machine, same seeds, two code versions: `7124e22` (be
 
 The resizes match the prediction for a doubling table exactly: 8, 11 and 15 for n = 1,000, 10,000 and 100,000, growing like log2(n) instead of like n. At n = 10,000 the build cost fell from about 2.7 to 3.2 microseconds to about 1.06 to 1.07 microseconds per insert in every order.
 
-After the fix, the cost per insert grows only 1.8x to 2.1x from n = 10,000 to n = 100,000 for random, reversed and nearly sorted input, against 12x to 17x before. Sorted input grew 4.4x (1.07 to 4.67 microseconds), more than the other orders. I attribute this to timing noise and to cache effects of a much larger bucket list, since the counters are identical across insert orders, but I have not isolated it. It is still well below the 17x growth before the fix. Resizes at n = 1,000 rose from 2 to 8 with doubling, because the old fixed step jumped straight to 1,032 buckets; those small resizes are cheap and the cost per insert at n = 1,000 is unchanged (about 3 microseconds).
+After the fix, the cost per insert grows only 1.8x to 2.1x from n = 10,000 to n = 100,000 for random, reversed and nearly sorted input, against 12x to 17x before. Sorted input grew 4.4x (1.07 to 4.67 microseconds), more than the other orders. I reran E5 on the same hash table code (code `23e3aa3`, which differs from `9174a5c` only in `sorted_list.py`), and the sorted build at n = 100,000 came out at 2.27 microseconds (replicates 2.1 to 2.9), in line with the other orders (2.11 to 2.14). All five replicates in the first run were between 4.5 and 5.7 microseconds, so the machine was slower for that whole stretch of the run, and the counters are identical across insert orders. So the 4.67 was a transient slowdown, not a property of sorted input. In the rerun the cost per insert grows 1.8x to 2.1x from n = 10,000 to n = 100,000 in every order. Resizes at n = 1,000 rose from 2 to 8 with doubling, because the old fixed step jumped straight to 1,032 buckets; those small resizes are cheap and the cost per insert at n = 1,000 is unchanged (about 3 microseconds).
 
-After the fix, the build-cost figure: ![E5 build cost after the fix](../analysis/e5_build_cost_after.png) and the same table of build time and resizes: ![hash table build time and resizes after the fix](../analysis/e5_resize_timing_hashtable_after.png)
+After the fix, the build-cost figure, from the rerun on `23e3aa3` (its hash table code is identical to the fix commit `9174a5c`): ![E5 build cost after the fix](../analysis/e5_build_cost_after_23e3aa3.png) and the table of build time and resizes from the first run after the fix (`9174a5c`), which is the one in the table above: ![hash table build time and resizes after the fix](../analysis/e5_resize_timing_hashtable_after.png)
 
 `make test` still passes (168 passed, 3 skipped).
 

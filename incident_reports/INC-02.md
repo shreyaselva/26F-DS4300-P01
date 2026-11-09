@@ -55,7 +55,7 @@ Same experiment (E5), same machine, same seeds, two code versions: `9e83b18` (be
 | sorted | 21 | 17 | 11.39 | 1.0 |
 | reversed | 21 | 17 | 11.39 | 1.0 |
 
-Figure (after the fix): ![AVL counters after the fix](../analysis/avl_after_fix.png)
+Figure (after the fix): ![AVL counters after the fix](../analysis/e5_avl_post-fix.png)
 
 Rotations fell by a factor of 9 to 21, and every height is now below the bound of about 24. For sorted and reversed input the height is 17, which is the minimum possible for 100,000 keys, so those trees are perfectly balanced. The B+ tree rows did not change, as expected, since only `avl_tree.py` was modified. `make test` still passes (168 passed, 3 skipped).
 
